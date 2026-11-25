@@ -2,14 +2,25 @@
 
 A responsive Home Assistant Lovelace card for air conditioners, fans and weather. It is inspired by an LCARS-style whole-home cooling screen while remaining brand-neutral and safe to share.
 
+## Screenshots
+
+Running ACs use a blue pulse, while running fans use a white pulse. Temperature, fan-mode, speed and oscillation controls remain expanded on the dashboard.
+
+![Generic cooling dashboard with blue AC and white fan pulses](screenshots/cooling-dashboard-overview.png)
+
+Tapping a device opens its Home Assistant details dialog. The exact controls vary according to the installed climate or fan integration.
+
+![Generic open climate control](screenshots/climate-card-open.png)
+
 ## Features
 
-- Climate and fan cards in responsive grids
+- Expanded climate and fan cards in responsive grids
 - Current and target temperature
 - Optional humidity and live-power sensors
 - Total configured cooling power in the header
 - Running AC glow and a faster pulse for the coldest running room
-- Animated fan icon while a fan is running
+- White pulsing fan cards and an animated fan icon while running
+- Expanded temperature, climate fan-mode, fan-speed and oscillation controls
 - Optional AC display/LED toggle
 - Current outside weather
 - Tap any AC or fan card to open Home Assistant's normal controls

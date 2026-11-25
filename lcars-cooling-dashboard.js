@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -121,6 +121,26 @@ class LcarsCoolingDashboard extends HTMLElement {
     }
   }
 
+  async _adjustTemperature(entityId, delta) {
+    const state = this._state(entityId);
+    const current = Number(state?.attributes?.temperature);
+    if (!Number.isFinite(current)) return;
+    await this._hass.callService("climate", "set_temperature", { entity_id: entityId, temperature: current + Number(delta) });
+  }
+
+  async _setFanMode(entityId, fanMode) {
+    await this._hass.callService("climate", "set_fan_mode", { entity_id: entityId, fan_mode: fanMode });
+  }
+
+  async _setFanSpeed(entityId, percentage) {
+    await this._hass.callService("fan", "set_percentage", { entity_id: entityId, percentage: Number(percentage) });
+  }
+
+  async _toggleOscillation(entityId) {
+    const oscillating = Boolean(this._state(entityId)?.attributes?.oscillating);
+    await this._hass.callService("fan", "oscillate", { entity_id: entityId, oscillating: !oscillating });
+  }
+
   _weatherCard() {
     const state = this._state(this._config.weather);
     if (!state) return "";
@@ -145,6 +165,8 @@ class LcarsCoolingDashboard extends HTMLElement {
     const power = this._power(item, state);
     const isColdest = running && current !== null && current === coldest;
     const mode = unavailable ? "Unavailable" : running ? String(state.state).replaceAll("_", " ") : "Off";
+    const fanModes = state?.attributes?.fan_modes || [];
+    const fanMode = state?.attributes?.fan_mode;
     return `
       <article class="entity-card climate ${running ? "running" : ""} ${isColdest ? "coldest" : ""} ${unavailable ? "unavailable" : ""}" data-entity="${escapeHtml(item.entity)}">
         <div class="card-top"><ha-icon icon="${escapeHtml(item.icon || "mdi:air-conditioner")}"></ha-icon><strong>${escapeHtml(item.name || state?.attributes?.friendly_name || item.entity)}</strong></div>
@@ -154,6 +176,12 @@ class LcarsCoolingDashboard extends HTMLElement {
           ${humidity === null ? "" : `<span><ha-icon icon="mdi:water-percent"></ha-icon>${Math.round(humidity)}%</span>`}
           ${power === null ? "" : `<span><ha-icon icon="mdi:lightning-bolt"></ha-icon>${escapeHtml(this._formatPower(power))}</span>`}
         </div>
+        <div class="temperature-control">
+          <button data-temperature="${escapeHtml(item.entity)}" data-delta="-1" title="Lower target temperature">−</button>
+          <strong>${Number.isFinite(target) ? `${target.toFixed(1)}°C` : "—"}</strong>
+          <button data-temperature="${escapeHtml(item.entity)}" data-delta="1" title="Raise target temperature">+</button>
+        </div>
+        ${fanModes.length ? `<label class="mode-control"><ha-icon icon="mdi:fan-auto"></ha-icon><select data-fan-mode="${escapeHtml(item.entity)}">${fanModes.map((option) => `<option value="${escapeHtml(option)}" ${option === fanMode ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>` : ""}
         <div class="actions">
           <button class="action power ${running ? "active" : ""}" data-toggle="${escapeHtml(item.entity)}" title="Power"><ha-icon icon="mdi:power"></ha-icon></button>
           ${item.led ? `<button class="action led ${this._value(item.led) === "on" ? "active" : ""}" data-toggle="${escapeHtml(item.led)}" title="Display light"><ha-icon icon="mdi:television-ambient-light"></ha-icon></button>` : ""}
@@ -169,6 +197,7 @@ class LcarsCoolingDashboard extends HTMLElement {
     const humidity = this._humidity(item, state);
     const power = this._power(item, state);
     const percentage = Number(state?.attributes?.percentage);
+    const oscillating = Boolean(state?.attributes?.oscillating);
     return `
       <article class="entity-card fan ${running ? "running" : ""} ${unavailable ? "unavailable" : ""}" data-entity="${escapeHtml(item.entity)}">
         <div class="card-top"><ha-icon class="fan-icon" icon="${escapeHtml(item.icon || "mdi:fan")}"></ha-icon><strong>${escapeHtml(item.name || state?.attributes?.friendly_name || item.entity)}</strong></div>
@@ -177,7 +206,8 @@ class LcarsCoolingDashboard extends HTMLElement {
           ${humidity === null ? "" : `<span><ha-icon icon="mdi:water-percent"></ha-icon>${Math.round(humidity)}%</span>`}
           ${power === null ? "" : `<span><ha-icon icon="mdi:lightning-bolt"></ha-icon>${escapeHtml(this._formatPower(power))}</span>`}
         </div>
-        <div class="actions"><button class="action power ${running ? "active" : ""}" data-toggle="${escapeHtml(item.entity)}" title="Power"><ha-icon icon="mdi:power"></ha-icon></button><span>Tap card for controls</span></div>
+        <input class="speed" data-fan-speed="${escapeHtml(item.entity)}" type="range" min="0" max="100" step="10" value="${Number.isFinite(percentage) ? percentage : 0}" aria-label="Fan speed">
+        <div class="fan-actions"><button class="feature-button" data-toggle="${escapeHtml(item.entity)}" title="Power"><ha-icon icon="mdi:power"></ha-icon></button><button class="feature-button ${oscillating ? "active" : ""}" data-oscillate="${escapeHtml(item.entity)}" title="Oscillation"><ha-icon icon="mdi:rotate-360"></ha-icon></button></div>
       </article>`;
   }
 
@@ -218,10 +248,11 @@ class LcarsCoolingDashboard extends HTMLElement {
         .grid { display:grid; gap:12px; }
         .ac-grid { grid-template-columns:repeat(var(--cooling-ac-columns),minmax(0,1fr)); }
         .fan-grid { grid-template-columns:repeat(var(--cooling-fan-columns),minmax(0,1fr)); }
-        .entity-card { position:relative; min-width:0; min-height:154px; padding:15px; border:1px solid var(--divider-color); border-radius:16px; background:rgba(255,255,255,.025); color:var(--primary-text-color); cursor:pointer; transition:transform .15s ease,box-shadow .25s ease,border-color .25s ease; }
+        .entity-card { position:relative; min-width:0; min-height:228px; padding:15px; border:1px solid var(--divider-color); border-radius:16px; background:rgba(255,255,255,.025); color:var(--primary-text-color); cursor:pointer; transition:transform .15s ease,box-shadow .25s ease,border-color .25s ease; }
         .entity-card:hover { transform:translateY(-1px); }
         .entity-card.running { border-color:rgba(33,150,243,.85); animation:running-glow 3.2s ease-in-out infinite; }
         .entity-card.coldest { animation:coldest-glow 1.7s ease-in-out infinite; }
+        .entity-card.fan.running { border-color:rgba(255,255,255,.92); animation:white-glow 2.2s ease-in-out infinite; }
         .entity-card.unavailable { opacity:.48; }
         .card-top { display:flex; align-items:center; gap:9px; min-width:0; }
         .card-top strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -232,12 +263,22 @@ class LcarsCoolingDashboard extends HTMLElement {
         .details span { display:inline-flex; align-items:center; gap:3px; }
         .details ha-icon { width:16px; }
         .actions { display:flex; align-items:center; gap:7px; margin-top:11px; color:var(--secondary-text-color); font-size:.72rem; }
+        .temperature-control { height:54px; display:grid; grid-template-columns:44px 1fr 44px; align-items:center; margin-top:12px; border-radius:13px; background:rgba(255,255,255,.055); text-align:center; }
+        .temperature-control button { height:100%; border:0; background:transparent; color:var(--primary-text-color); font-size:1.45rem; cursor:pointer; }
+        .mode-control { height:48px; display:flex; align-items:center; gap:9px; margin-top:10px; padding:0 14px; border-radius:13px; background:rgba(255,255,255,.055); }
+        .mode-control ha-icon { width:20px; }
+        .mode-control select { flex:1; min-width:0; border:0; background:transparent; color:var(--primary-text-color); font:inherit; text-transform:capitalize; }
+        .speed { width:100%; height:56px; margin:10px 0 8px; accent-color:#10bed5; }
+        .fan-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .feature-button { height:48px; border:0; border-radius:13px; background:rgba(255,255,255,.055); color:var(--primary-text-color); cursor:pointer; }
+        .feature-button.active { background:#e7e7e7; color:#222; }
         .action { width:32px; height:32px; display:grid; place-items:center; padding:0; border:1px solid var(--divider-color); border-radius:50%; background:var(--card-background-color); color:var(--secondary-text-color); cursor:pointer; }
         .action.active.power { color:#091d10; background:#5cff9a; border-color:#5cff9a; }
         .action.active.led { color:#2b2300; background:#ffe55c; border-color:#ffe55c; }
         .action ha-icon { width:18px; }
         @keyframes running-glow { 0%,100%{box-shadow:0 0 3px rgba(33,150,243,.28)} 50%{box-shadow:0 0 16px 3px rgba(33,150,243,.58)} }
         @keyframes coldest-glow { 0%,100%{box-shadow:0 0 5px rgba(0,229,255,.35)} 50%{box-shadow:0 0 22px 5px rgba(0,229,255,.82)} }
+        @keyframes white-glow { 0%,100%{box-shadow:0 0 4px rgba(255,255,255,.28)} 50%{box-shadow:0 0 18px 3px rgba(255,255,255,.72)} }
         @keyframes spin { to{transform:rotate(360deg)} }
         @media(max-width:800px){ :host{--cooling-ac-columns:2;--cooling-fan-columns:2}.header{align-items:flex-start;flex-direction:column}.summary{flex-wrap:wrap}.entity-card{min-height:148px} }
         @media(max-width:480px){ ha-card{padding:11px}.grid{gap:9px}.entity-card{padding:12px}.actions span{display:none} }
@@ -257,6 +298,19 @@ class LcarsCoolingDashboard extends HTMLElement {
       event.preventDefault();
       event.stopPropagation();
       this._toggle(button.dataset.toggle);
+    }));
+    this.shadowRoot.querySelectorAll("[data-temperature]").forEach((button) => button.addEventListener("click", (event) => {
+      event.preventDefault(); event.stopPropagation();
+      this._adjustTemperature(button.dataset.temperature, button.dataset.delta);
+    }));
+    this.shadowRoot.querySelectorAll("[data-fan-mode]").forEach((select) => select.addEventListener("change", (event) => {
+      event.stopPropagation(); this._setFanMode(select.dataset.fanMode, select.value);
+    }));
+    this.shadowRoot.querySelectorAll("[data-fan-speed]").forEach((slider) => slider.addEventListener("change", (event) => {
+      event.stopPropagation(); this._setFanSpeed(slider.dataset.fanSpeed, slider.value);
+    }));
+    this.shadowRoot.querySelectorAll("[data-oscillate]").forEach((button) => button.addEventListener("click", (event) => {
+      event.preventDefault(); event.stopPropagation(); this._toggleOscillation(button.dataset.oscillate);
     }));
   }
 }

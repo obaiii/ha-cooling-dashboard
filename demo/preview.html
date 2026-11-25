@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LCARS Cooling Dashboard Preview</title>
+  <style>
+    :root{--card-background-color:#1c1c1c;--ha-card-background:#1c1c1c;--primary-text-color:#f1f1f1;--secondary-text-color:#aaa;--divider-color:#3b3b3b;--primary-color:#2196f3}
+    *{box-sizing:border-box}body{margin:0;background:#111;color:#eee;font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .shell{max-width:1360px;margin:auto;padding:22px}.topbar{height:64px;display:flex;align-items:center;gap:28px;padding:0 22px;margin-bottom:14px;border-bottom:2px solid #333;background:#1a1a1a;color:#bbb;font-size:24px}.topbar strong{color:#fff}.brand{margin-right:auto;letter-spacing:.08em}.mock-dialog{display:none;position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.58);align-items:center;justify-content:center;padding:30px}.mock-dialog.open{display:flex}.dialog-card{position:relative;width:min(760px,92vw);min-height:720px;padding:30px 42px;border-radius:28px;background:#1c1c1c;box-shadow:0 22px 80px #000;color:#eee}.close{position:absolute;left:26px;top:25px;font-size:32px}.dialog-title{margin-left:36px}.dialog-title small{display:block;color:#aaa}.dialog-title h2{margin:0;font-size:27px}.current{text-align:center;margin:44px 0 16px;color:#bbb}.current strong{display:block;color:#fff;font-size:26px}.pills{display:flex;gap:16px}.pill{padding:11px 20px;border-radius:24px;background:#54f792;color:#082412;font-weight:800}.pill.led{background:#332f18;color:#ffe26a;border:1px solid #a9952f}.dialog-power{margin:10px 0 12px;color:#ddd;font-weight:700}.dial{width:390px;height:390px;margin:0 auto;border-radius:50%;background:conic-gradient(from 220deg,#29a9ff 0 68%,#185984 68% 83%,transparent 83%);padding:32px;clip-path:polygon(0 0,100% 0,100% 91%,83% 91%,72% 75%,28% 75%,17% 91%,0 91%)}.dial-inner{height:100%;display:grid;place-items:center;align-content:center;border-radius:50%;background:#1c1c1c}.dial-inner small{font-size:20px}.dial-inner strong{font-size:78px;font-weight:400}.dialog-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:-18px}.dialog-actions div{padding:15px;border-radius:15px;background:#252525;text-align:center}.notice{margin-top:16px;text-align:center;color:#999;font-size:13px}
+    body:not(.open-preview) .mock-dialog{display:none}
+  </style>
+</head>
+<body>
+  <div class="topbar"><strong>⌂</strong><span>⚡</span><span>❄</span><span>◉</span><span>▣</span><span class="brand">GENERIC HOME</span><span>20:10</span></div>
+  <main class="shell"><lcars-cooling-dashboard id="dashboard"></lcars-cooling-dashboard></main>
+  <div class="mock-dialog" id="dialog">
+    <section class="dialog-card">
+      <span class="close">×</span><div class="dialog-title"><small>Living Room</small><h2>Living Room AC</h2></div>
+      <div class="current">Current temperature<strong>26.8 °C</strong></div>
+      <div class="pills"><span class="pill">⏻ &nbsp;ON</span><span class="pill led">☼ &nbsp;LED ON</span></div>
+      <div class="dialog-power">⚡ 1,180 W</div>
+      <div class="dial"><div class="dial-inner"><small>Cool</small><strong>16<sup style="font-size:24px">°C</sup></strong></div></div>
+      <div class="dialog-actions"><div>❄ Mode<br><strong>Cool</strong></div><div>◉ Preset<br><strong>None</strong></div><div>⌁ Fan<br><strong>High</strong></div></div>
+      <div class="notice">Home Assistant's details dialog varies by climate integration.</div>
+    </section>
+  </div>
+  <script>
+    class HaCard extends HTMLElement{} customElements.define('ha-card',HaCard);
+    const icons={"mdi:air-conditioner":"❄","mdi:fan":"✣","mdi:fan-auto":"⌁","mdi:water-percent":"💧","mdi:lightning-bolt":"⚡","mdi:power":"⏻","mdi:rotate-360":"↻","mdi:television-ambient-light":"☼"};
+    class HaIcon extends HTMLElement{connectedCallback(){this.textContent=icons[this.getAttribute('icon')]||'●';this.style.display='inline-grid';this.style.placeItems='center'}} customElements.define('ha-icon',HaIcon);
+  </script>
+  <script src="../lcars-cooling-dashboard.js"></script>
+  <script>
+    const now=new Date().toISOString();
+    const s=(entity_id,state,attributes)=>({entity_id,state,attributes,last_updated:now});
+    const states={
+      'weather.home':s('weather.home','partlycloudy',{temperature:28.7,humidity:82}),
+      'sensor.outside_humidity':s('sensor.outside_humidity','82',{}),
+      'climate.living':s('climate.living','cool',{friendly_name:'Living Room AC',current_temperature:26.8,temperature:16,fan_mode:'high',fan_modes:['auto','silent','high'],compressor_power:1180}),
+      'climate.bedroom':s('climate.bedroom','cool',{friendly_name:'Bedroom AC',current_temperature:27,temperature:16,fan_mode:'auto',fan_modes:['auto','silent','high'],compressor_power:1120}),
+      'climate.study':s('climate.study','off',{friendly_name:'Study AC',current_temperature:30.8,temperature:22,fan_mode:'auto',fan_modes:['auto','silent','high']}),
+      'climate.dining':s('climate.dining','cool',{friendly_name:'Dining Room AC',current_temperature:27.7,temperature:19,fan_mode:'auto',fan_modes:['auto','silent','high'],compressor_power:420}),
+      'climate.kitchen':s('climate.kitchen','off',{friendly_name:'Kitchen AC',current_temperature:31.2,temperature:20,fan_mode:'high',fan_modes:['auto','silent','high']}),
+      'climate.guest':s('climate.guest','cool',{friendly_name:'Guest Room AC',current_temperature:27.2,temperature:16,fan_mode:'auto',fan_modes:['auto','silent','high'],compressor_power:730}),
+      'sensor.living_humidity':s('sensor.living_humidity','58',{}),'sensor.bedroom_humidity':s('sensor.bedroom_humidity','61',{}),'sensor.study_humidity':s('sensor.study_humidity','67',{}),'sensor.dining_humidity':s('sensor.dining_humidity','74',{}),'sensor.kitchen_humidity':s('sensor.kitchen_humidity','70',{}),'sensor.guest_humidity':s('sensor.guest_humidity','59',{}),
+      'switch.living_display':s('switch.living_display','on',{}),
+      'fan.bedroom':s('fan.bedroom','off',{friendly_name:'Bedroom Fan',percentage:0,oscillating:false}),
+      'fan.family':s('fan.family','on',{friendly_name:'Family Room Fan',percentage:70,oscillating:true}),
+      'fan.study':s('fan.study','off',{friendly_name:'Study Fan',percentage:0,oscillating:false}),
+      'fan.lounge':s('fan.lounge','on',{friendly_name:'Lounge Fan',percentage:40,oscillating:false}),
+      'fan.office':s('fan.office','off',{friendly_name:'Office Fan',percentage:0,oscillating:false}),
+      'fan.guest':s('fan.guest','off',{friendly_name:'Guest Room Fan',percentage:0,oscillating:false})
+    };
+    const dashboard=document.getElementById('dashboard');
+    dashboard.setConfig({title:'COOLING SYSTEMS',weather:'weather.home',outside_humidity:'sensor.outside_humidity',air_conditioners:[
+      {entity:'climate.living',name:'Living Room AC',humidity:'sensor.living_humidity',led:'switch.living_display'},
+      {entity:'climate.bedroom',name:'Bedroom AC',humidity:'sensor.bedroom_humidity'},
+      {entity:'climate.study',name:'Study AC',humidity:'sensor.study_humidity'},
+      {entity:'climate.dining',name:'Dining Room AC',humidity:'sensor.dining_humidity'},
+      {entity:'climate.kitchen',name:'Kitchen AC',humidity:'sensor.kitchen_humidity'},
+      {entity:'climate.guest',name:'Guest Room AC',humidity:'sensor.guest_humidity'}],fans:[
+      {entity:'fan.bedroom',name:'Bedroom Fan'},{entity:'fan.family',name:'Family Room Fan'},{entity:'fan.study',name:'Study Fan'},{entity:'fan.lounge',name:'Lounge Fan'},{entity:'fan.office',name:'Office Fan'},{entity:'fan.guest',name:'Guest Room Fan'}]});
+    dashboard.hass={states,callService:async()=>{}};
+    if(new URLSearchParams(location.search).get('dialog')==='1'){document.body.classList.add('open-preview');document.getElementById('dialog').classList.add('open')}
+  </script>
+</body>
+</html>

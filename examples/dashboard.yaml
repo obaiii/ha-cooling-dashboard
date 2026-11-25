@@ -1,0 +1,36 @@
+type: custom:lcars-cooling-dashboard
+title: COOLING SYSTEMS
+weather: weather.forecast_home
+outside_humidity: sensor.outside_humidity
+weather_name: Outside
+ac_columns: 3
+fan_columns: 3
+show_summary: true
+
+air_conditioners:
+  - entity: climate.living_room
+    name: Living Room
+    humidity: sensor.living_room_humidity
+    power: sensor.living_room_ac_power
+    led: switch.living_room_ac_display
+
+  - entity: climate.bedroom
+    name: Bedroom
+    humidity: sensor.bedroom_humidity
+    power: sensor.bedroom_ac_power
+
+  - entity: climate.study
+    name: Study
+    # If your integration exposes power as a climate attribute instead of a
+    # separate sensor, use power_attribute.
+    power_attribute: realtime_power
+
+fans:
+  - entity: fan.living_room
+    name: Living Room Fan
+    humidity: sensor.living_room_fan_humidity
+    power: sensor.living_room_fan_power
+
+  - entity: fan.bedroom
+    name: Bedroom Fan
+    humidity: sensor.bedroom_fan_humidity

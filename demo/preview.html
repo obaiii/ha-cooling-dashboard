@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>LCARS Cooling Dashboard Preview</title>
+  <title>Cooling Dashboard Preview</title>
   <style>
     :root{--card-background-color:#1c1c1c;--ha-card-background:#1c1c1c;--primary-text-color:#f1f1f1;--secondary-text-color:#aaa;--divider-color:#3b3b3b;--primary-color:#2196f3}
     *{box-sizing:border-box}body{margin:0;background:#111;color:#eee;font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -13,7 +13,7 @@
 </head>
 <body>
   <div class="topbar"><strong>⌂</strong><span>⚡</span><span>❄</span><span>◉</span><span>▣</span><span class="brand">GENERIC HOME</span><span>20:10</span></div>
-  <main class="shell"><lcars-cooling-dashboard id="dashboard"></lcars-cooling-dashboard></main>
+  <main class="shell"><cooling-dashboard id="dashboard"></cooling-dashboard></main>
   <div class="mock-dialog" id="dialog">
     <section class="dialog-card">
       <span class="close">×</span><div class="dialog-title"><small>Living Room</small><h2>Living Room AC</h2></div>
@@ -30,7 +30,7 @@
     const icons={"mdi:air-conditioner":"❄","mdi:fan":"✣","mdi:fan-auto":"⌁","mdi:water-percent":"💧","mdi:lightning-bolt":"⚡","mdi:power":"⏻","mdi:rotate-360":"↻","mdi:television-ambient-light":"☼"};
     class HaIcon extends HTMLElement{connectedCallback(){this.textContent=icons[this.getAttribute('icon')]||'●';this.style.display='inline-grid';this.style.placeItems='center'}} customElements.define('ha-icon',HaIcon);
   </script>
-  <script src="../lcars-cooling-dashboard.js"></script>
+  <script src="../cooling-dashboard.js"></script>
   <script>
     const now=new Date().toISOString();
     const s=(entity_id,state,attributes)=>({entity_id,state,attributes,last_updated:now});
@@ -50,7 +50,13 @@
       'fan.study':s('fan.study','off',{friendly_name:'Study Fan',percentage:0,oscillating:false}),
       'fan.lounge':s('fan.lounge','on',{friendly_name:'Lounge Fan',percentage:40,oscillating:false}),
       'fan.office':s('fan.office','off',{friendly_name:'Office Fan',percentage:0,oscillating:false}),
-      'fan.guest':s('fan.guest','off',{friendly_name:'Guest Room Fan',percentage:0,oscillating:false})
+      'fan.guest':s('fan.guest','off',{friendly_name:'Guest Room Fan',percentage:0,oscillating:false}),
+      'sensor.bedroom_pm2_5':s('sensor.bedroom_pm2_5','8',{unit_of_measurement:'µg/m³'}),
+      'sensor.family_pm2_5':s('sensor.family_pm2_5','48',{unit_of_measurement:'µg/m³'}),
+      'sensor.study_pm2_5':s('sensor.study_pm2_5','18',{unit_of_measurement:'µg/m³'}),
+      'sensor.lounge_pm2_5':s('sensor.lounge_pm2_5','7',{unit_of_measurement:'µg/m³'}),
+      'sensor.office_pm2_5':s('sensor.office_pm2_5','11',{unit_of_measurement:'µg/m³'}),
+      'sensor.guest_pm2_5':s('sensor.guest_pm2_5','14',{unit_of_measurement:'µg/m³'})
     };
     const dashboard=document.getElementById('dashboard');
     dashboard.setConfig({title:'COOLING SYSTEMS',weather:'weather.home',outside_humidity:'sensor.outside_humidity',air_conditioners:[
@@ -60,7 +66,12 @@
       {entity:'climate.dining',name:'Dining Room AC',humidity:'sensor.dining_humidity'},
       {entity:'climate.kitchen',name:'Kitchen AC',humidity:'sensor.kitchen_humidity'},
       {entity:'climate.guest',name:'Guest Room AC',humidity:'sensor.guest_humidity'}],fans:[
-      {entity:'fan.bedroom',name:'Bedroom Fan'},{entity:'fan.family',name:'Family Room Fan'},{entity:'fan.study',name:'Study Fan'},{entity:'fan.lounge',name:'Lounge Fan'},{entity:'fan.office',name:'Office Fan'},{entity:'fan.guest',name:'Guest Room Fan'}]});
+      {entity:'fan.bedroom',name:'Bedroom Fan',pm2_5:'sensor.bedroom_pm2_5'},
+      {entity:'fan.family',name:'Family Room Fan',pm2_5:'sensor.family_pm2_5'},
+      {entity:'fan.study',name:'Study Fan',pm2_5:'sensor.study_pm2_5'},
+      {entity:'fan.lounge',name:'Lounge Fan',pm2_5:'sensor.lounge_pm2_5'},
+      {entity:'fan.office',name:'Office Fan',pm2_5:'sensor.office_pm2_5'},
+      {entity:'fan.guest',name:'Guest Room Fan',pm2_5:'sensor.guest_pm2_5'}]});
     dashboard.hass={states,callService:async()=>{}};
     if(new URLSearchParams(location.search).get('dialog')==='1'){document.body.classList.add('open-preview');document.getElementById('dialog').classList.add('open')}
   </script>

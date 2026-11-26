@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "2.0.0";
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -9,7 +9,7 @@ const escapeHtml = (value) => String(value ?? "")
 
 const validValue = (value) => value !== undefined && value !== null && !["unknown", "unavailable", "none", ""].includes(String(value));
 
-class LcarsCoolingDashboard extends HTMLElement {
+class CoolingDashboard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -82,6 +82,14 @@ class LcarsCoolingDashboard extends HTMLElement {
     return Number.isFinite(value) ? value : null;
   }
 
+  _airQuality(item) {
+    const pm25 = this._number(item.pm2_5);
+    if (pm25 === null) return null;
+    if (pm25 <= 12) return { level: "good", label: "Good air quality", pm25 };
+    if (pm25 <= 35) return { level: "moderate", label: "Moderate air quality", pm25 };
+    return { level: "poor", label: "Poor air quality", pm25 };
+  }
+
   _formatPower(value) {
     if (!Number.isFinite(value)) return "—";
     return `${Math.round(value).toLocaleString()} W`;
@@ -91,7 +99,7 @@ class LcarsCoolingDashboard extends HTMLElement {
     if (!this._config || !this._hass) return "waiting";
     const ids = new Set([this._config.weather, this._config.outside_humidity]);
     for (const item of [...this._config.air_conditioners, ...this._config.fans]) {
-      [item.entity, item.humidity, item.power, item.led].filter(Boolean).forEach((id) => ids.add(id));
+      [item.entity, item.humidity, item.power, item.led, item.pm2_5].filter(Boolean).forEach((id) => ids.add(id));
     }
     return JSON.stringify([...ids].map((id) => {
       const state = this._state(id);
@@ -133,10 +141,12 @@ class LcarsCoolingDashboard extends HTMLElement {
   }
 
   async _setFanSpeed(entityId, percentage) {
+    if (this._state(entityId)?.state !== "on") return;
     await this._hass.callService("fan", "set_percentage", { entity_id: entityId, percentage: Number(percentage) });
   }
 
   async _toggleOscillation(entityId) {
+    if (this._state(entityId)?.state !== "on") return;
     const oscillating = Boolean(this._state(entityId)?.attributes?.oscillating);
     await this._hass.callService("fan", "oscillate", { entity_id: entityId, oscillating: !oscillating });
   }
@@ -198,16 +208,18 @@ class LcarsCoolingDashboard extends HTMLElement {
     const power = this._power(item, state);
     const percentage = Number(state?.attributes?.percentage);
     const oscillating = Boolean(state?.attributes?.oscillating);
+    const airQuality = this._airQuality(item);
     return `
-      <article class="entity-card fan ${running ? "running" : ""} ${unavailable ? "unavailable" : ""}" data-entity="${escapeHtml(item.entity)}">
+      <article class="entity-card fan ${running ? "running" : ""} ${airQuality ? `air-${airQuality.level}` : ""} ${unavailable ? "unavailable" : ""}" data-entity="${escapeHtml(item.entity)}">
         <div class="card-top"><ha-icon class="fan-icon" icon="${escapeHtml(item.icon || "mdi:fan")}"></ha-icon><strong>${escapeHtml(item.name || state?.attributes?.friendly_name || item.entity)}</strong></div>
         <div class="primary-reading">${unavailable ? "—" : running ? `${Number.isFinite(percentage) ? Math.round(percentage) : 100}%` : "OFF"}</div>
         <div class="details">
           ${humidity === null ? "" : `<span><ha-icon icon="mdi:water-percent"></ha-icon>${Math.round(humidity)}%</span>`}
           ${power === null ? "" : `<span><ha-icon icon="mdi:lightning-bolt"></ha-icon>${escapeHtml(this._formatPower(power))}</span>`}
+          ${airQuality ? `<span class="air-badge ${airQuality.level}">${escapeHtml(airQuality.label)}</span>` : ""}
         </div>
-        <input class="speed" data-fan-speed="${escapeHtml(item.entity)}" type="range" min="0" max="100" step="10" value="${Number.isFinite(percentage) ? percentage : 0}" aria-label="Fan speed">
-        <div class="fan-actions"><button class="feature-button" data-toggle="${escapeHtml(item.entity)}" title="Power"><ha-icon icon="mdi:power"></ha-icon></button><button class="feature-button ${oscillating ? "active" : ""}" data-oscillate="${escapeHtml(item.entity)}" title="Oscillation"><ha-icon icon="mdi:rotate-360"></ha-icon></button></div>
+        <input class="speed" data-fan-speed="${escapeHtml(item.entity)}" type="range" min="0" max="100" step="10" value="${Number.isFinite(percentage) ? percentage : 0}" aria-label="Fan speed" ${running ? "" : "disabled"}>
+        <div class="fan-actions"><button class="feature-button" data-toggle="${escapeHtml(item.entity)}" title="Power"><ha-icon icon="mdi:power"></ha-icon></button><button class="feature-button ${oscillating ? "active" : ""}" data-oscillate="${escapeHtml(item.entity)}" title="Oscillation" ${running ? "" : "disabled"}><ha-icon icon="mdi:rotate-360"></ha-icon></button></div>
       </article>`;
   }
 
@@ -253,6 +265,7 @@ class LcarsCoolingDashboard extends HTMLElement {
         .entity-card.running { border-color:rgba(33,150,243,.85); animation:running-glow 3.2s ease-in-out infinite; }
         .entity-card.coldest { animation:coldest-glow 1.7s ease-in-out infinite; }
         .entity-card.fan.running { border-color:rgba(255,255,255,.92); animation:white-glow 2.2s ease-in-out infinite; }
+        .entity-card.fan.running.air-poor { animation:poor-air-glow .9s ease-in-out infinite; }
         .entity-card.unavailable { opacity:.48; }
         .card-top { display:flex; align-items:center; gap:9px; min-width:0; }
         .card-top strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -262,6 +275,10 @@ class LcarsCoolingDashboard extends HTMLElement {
         .details { min-height:24px; display:flex; flex-wrap:wrap; gap:7px 12px; color:var(--secondary-text-color); font-size:.86rem; text-transform:capitalize; }
         .details span { display:inline-flex; align-items:center; gap:3px; }
         .details ha-icon { width:16px; }
+        .air-badge { padding:3px 8px; border-radius:11px; font-weight:800; text-transform:none; }
+        .air-badge.good { background:rgba(76,175,80,.15); color:#78e08f; }
+        .air-badge.moderate { background:rgba(255,152,0,.18); color:#ffb74d; }
+        .air-badge.poor { background:rgba(244,67,54,.2); color:#ff6b6b; }
         .actions { display:flex; align-items:center; gap:7px; margin-top:11px; color:var(--secondary-text-color); font-size:.72rem; }
         .temperature-control { height:54px; display:grid; grid-template-columns:44px 1fr 44px; align-items:center; margin-top:12px; border-radius:13px; background:rgba(255,255,255,.055); text-align:center; }
         .temperature-control button { height:100%; border:0; background:transparent; color:var(--primary-text-color); font-size:1.45rem; cursor:pointer; }
@@ -271,6 +288,7 @@ class LcarsCoolingDashboard extends HTMLElement {
         .speed { width:100%; height:56px; margin:10px 0 8px; accent-color:#10bed5; }
         .fan-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
         .feature-button { height:48px; border:0; border-radius:13px; background:rgba(255,255,255,.055); color:var(--primary-text-color); cursor:pointer; }
+        .feature-button:disabled,.speed:disabled { cursor:not-allowed; opacity:.38; }
         .feature-button.active { background:#e7e7e7; color:#222; }
         .action { width:32px; height:32px; display:grid; place-items:center; padding:0; border:1px solid var(--divider-color); border-radius:50%; background:var(--card-background-color); color:var(--secondary-text-color); cursor:pointer; }
         .action.active.power { color:#091d10; background:#5cff9a; border-color:#5cff9a; }
@@ -279,6 +297,7 @@ class LcarsCoolingDashboard extends HTMLElement {
         @keyframes running-glow { 0%,100%{box-shadow:0 0 3px rgba(33,150,243,.28)} 50%{box-shadow:0 0 16px 3px rgba(33,150,243,.58)} }
         @keyframes coldest-glow { 0%,100%{box-shadow:0 0 5px rgba(0,229,255,.35)} 50%{box-shadow:0 0 22px 5px rgba(0,229,255,.82)} }
         @keyframes white-glow { 0%,100%{box-shadow:0 0 4px rgba(255,255,255,.28)} 50%{box-shadow:0 0 18px 3px rgba(255,255,255,.72)} }
+        @keyframes poor-air-glow { 0%,100%{border-color:rgba(255,45,45,.98);box-shadow:inset 0 0 0 2px rgba(255,45,45,.98),0 0 18px 4px rgba(255,35,35,.78)} 50%{border-color:rgba(255,255,255,.98);box-shadow:inset 0 0 0 2px rgba(255,255,255,.98),0 0 18px 4px rgba(255,255,255,.72)} }
         @keyframes spin { to{transform:rotate(360deg)} }
         @media(max-width:800px){ :host{--cooling-ac-columns:2;--cooling-fan-columns:2}.header{align-items:flex-start;flex-direction:column}.summary{flex-wrap:wrap}.entity-card{min-height:148px} }
         @media(max-width:480px){ ha-card{padding:11px}.grid{gap:9px}.entity-card{padding:12px}.actions span{display:none} }
@@ -315,17 +334,17 @@ class LcarsCoolingDashboard extends HTMLElement {
   }
 }
 
-if (!customElements.get("lcars-cooling-dashboard")) {
-  customElements.define("lcars-cooling-dashboard", LcarsCoolingDashboard);
+if (!customElements.get("cooling-dashboard")) {
+  customElements.define("cooling-dashboard", CoolingDashboard);
 }
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "lcars-cooling-dashboard",
-  name: "LCARS Cooling Dashboard",
+  type: "cooling-dashboard",
+  name: "Cooling Dashboard",
   description: "A responsive Home Assistant dashboard for climate units, fans, humidity, power and weather.",
   preview: true,
-  documentationURL: "https://github.com/obaiii/ha-lcars-cooling-dashboard",
+  documentationURL: "https://github.com/obaiii/ha-cooling-dashboard",
 });
 
-console.info(`%c LCARS COOLING DASHBOARD %c v${CARD_VERSION} `, "color:#101010;background:#66ccff;font-weight:700", "color:#66ccff;background:#101010");
+console.info(`%c COOLING DASHBOARD %c v${CARD_VERSION} `, "color:#101010;background:#66ccff;font-weight:700", "color:#66ccff;background:#101010");

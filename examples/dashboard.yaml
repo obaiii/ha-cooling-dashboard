@@ -1,4 +1,4 @@
-type: custom:lcars-cooling-dashboard
+type: custom:cooling-dashboard
 title: COOLING SYSTEMS
 weather: weather.forecast_home
 outside_humidity: sensor.outside_humidity
@@ -30,7 +30,9 @@ fans:
     name: Living Room Fan
     humidity: sensor.living_room_fan_humidity
     power: sensor.living_room_fan_power
+    pm2_5: sensor.living_room_fan_pm_2_5
 
   - entity: fan.bedroom
     name: Bedroom Fan
     humidity: sensor.bedroom_fan_humidity
+    pm2_5: sensor.bedroom_fan_pm_2_5

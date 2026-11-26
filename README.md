@@ -1,10 +1,10 @@
-# LCARS Cooling Dashboard
+# Cooling Dashboard
 
-A responsive Home Assistant Lovelace card for air conditioners, fans and weather. It is inspired by an LCARS-style whole-home cooling screen while remaining brand-neutral and safe to share.
+A responsive Home Assistant Lovelace card for air conditioners, fans, air quality and weather. It provides a polished whole-home cooling screen while remaining brand-neutral and safe to share.
 
 ## Screenshots
 
-Running ACs use a blue pulse, while running fans use a white pulse. Temperature, fan-mode, speed and oscillation controls remain expanded on the dashboard.
+Running ACs use a blue pulse, while running fans use a white pulse. A running fan with poor air quality pulses red and white. Temperature, fan-mode, speed and oscillation controls remain expanded on the dashboard.
 
 ![Generic cooling dashboard with blue AC and white fan pulses](screenshots/cooling-dashboard-overview.png)
 
@@ -20,7 +20,10 @@ Tapping a device opens its Home Assistant details dialog. The exact controls var
 - Total configured cooling power in the header
 - Running AC glow and a faster pulse for the coldest running room
 - White pulsing fan cards and an animated fan icon while running
+- Optional PM2.5 air-quality status: green for good, orange for moderate and red for poor
+- Red/white warning pulse when a fan is running during poor air quality
 - Expanded temperature, climate fan-mode, fan-speed and oscillation controls
+- Fan speed and oscillation stay locked while the fan is off; only its power button starts it
 - Optional AC display/LED toggle
 - Current outside weather
 - Tap any AC or fan card to open Home Assistant's normal controls
@@ -29,14 +32,14 @@ Tapping a device opens its Home Assistant details dialog. The exact controls var
 ## Install with HACS
 
 1. Open **HACS → ⋮ → Custom repositories**.
-2. Add `https://github.com/obaiii/ha-lcars-cooling-dashboard` as a **Dashboard** repository.
-3. Find **LCARS Cooling Dashboard** in HACS and install it.
+2. Add `https://github.com/obaiii/ha-cooling-dashboard` as a **Dashboard** repository.
+3. Find **Cooling Dashboard** in HACS and install it.
 4. Refresh the browser or fully restart the Home Assistant mobile app.
 
 HACS normally adds the JavaScript resource automatically. If it does not, add this under **Settings → Dashboards → Resources**:
 
 ```text
-/hacsfiles/ha-lcars-cooling-dashboard/lcars-cooling-dashboard.js
+/hacsfiles/ha-cooling-dashboard/cooling-dashboard.js
 ```
 
 Resource type: **JavaScript Module**.
@@ -46,7 +49,7 @@ Resource type: **JavaScript Module**.
 Create a Manual card and start with:
 
 ```yaml
-type: custom:lcars-cooling-dashboard
+type: custom:cooling-dashboard
 title: COOLING SYSTEMS
 weather: weather.forecast_home
 outside_humidity: sensor.outside_humidity
@@ -68,6 +71,7 @@ fans:
   - entity: fan.living_room
     name: Living Room Fan
     humidity: sensor.living_room_fan_humidity
+    pm2_5: sensor.living_room_fan_pm_2_5
 ```
 
 Replace every example entity with an entity from your own Home Assistant. A larger example is in [`examples/dashboard.yaml`](examples/dashboard.yaml).
@@ -98,17 +102,20 @@ Replace every example entity with an entity from your own Home Assistant. A larg
 | `humidity` | No | Humidity sensor |
 | `power` | No | Power sensor in watts |
 | `power_attribute` | No | Climate/fan attribute containing watts |
+| `pm2_5` | No | PM2.5 sensor used for the fan air-quality badge and poor-air warning pulse |
 | `led` | No | Optional switch controlling an AC display light |
 | `icon` | No | Optional Material Design icon |
 
 If neither `power` nor `power_attribute` is set, the card also checks the common `compressor_power`, `realtime_power`, and `power` attributes.
 
+Air-quality thresholds use PM2.5 values: good is 12 µg/m³ or below, moderate is above 12 through 35 µg/m³, and poor is above 35 µg/m³.
+
 ## Manual installation
 
-Download `lcars-cooling-dashboard.js`, copy it to `/config/www/`, and add this JavaScript module resource:
+Download `cooling-dashboard.js`, copy it to `/config/www/`, and add this JavaScript module resource:
 
 ```text
-/local/lcars-cooling-dashboard.js
+/local/cooling-dashboard.js
 ```
 
 ## Privacy

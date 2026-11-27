@@ -1,0 +1,160 @@
+blueprint:
+  name: Cooling Dashboard - Solar Surplus Cooling with Manual Priority
+  description: >-
+    Opt-in single-AC solar cooling. Use one instance per room. At 100% battery
+    and 5 minutes of measured spare solar, start at Cool 16°C, High. Optionally
+    shed ONLY an automatically started AC after 2 minutes of shortfall.
+    Disable shedding for a priority room that should remain on. Manual commands
+    or remote control changes release ownership for the day. Persistent ownership,
+    manual override and command-grace helpers are required. Qualification timers
+    restart after an HA restart. Configure headroom from PV minus existing load,
+    with conversion losses included; do not use a duplicate grid-import counter.
+  domain: automation
+  input:
+    ac: {name: Air conditioner, selector: {entity: {domain: climate}}}
+    enabled: {name: Solar cooling enable helper, selector: {entity: {domain: input_boolean}}}
+    battery: {name: Canonical battery SOC sensor (%), selector: {entity: {domain: sensor}}}
+    headroom: {name: Conservative measured spare solar headroom sensor (W), selector: {entity: {domain: sensor}}}
+    owned: {name: Automatically started ownership helper, selector: {entity: {domain: input_boolean}}}
+    manual: {name: Manual override helper, selector: {entity: {domain: input_boolean}}}
+    command_until: {name: Command grace timestamp helper (date and time), selector: {entity: {domain: input_datetime}}}
+    retry_after: {name: Restart cooldown timestamp helper (date and time), selector: {entity: {domain: input_datetime}}}
+    midea_device_id:
+      name: Optional Midea integration ID for immediate manual gear-command detection
+      default: ''
+      selector: {text: {}}
+    shed:
+      name: Switch off this auto-started AC when surplus disappears
+      default: true
+      selector: {boolean: {}}
+    required_watts:
+      name: Startup headroom including compressor ramp and margin
+      default: 2500
+      selector: {number: {min: 500, max: 10000, step: 100, unit_of_measurement: W}}
+    blocked:
+      name: Optional backup power or safety inhibit toggles
+      default: []
+      selector: {entity: {domain: input_boolean, multiple: true}}
+    full_power_actions:
+      name: Optional integration-specific actions to release compressor power limits
+      default: []
+      selector: {action: {}}
+mode: queued
+max: 20
+trigger_variables:
+  ac: !input ac
+  enabled: !input enabled
+  battery: !input battery
+  headroom: !input headroom
+  owned: !input owned
+  manual: !input manual
+  watts: !input required_watts
+  shed: !input shed
+  blocked: !input blocked
+  retry_after: !input retry_after
+variables:
+  ac: !input ac
+  enabled: !input enabled
+  battery: !input battery
+  headroom: !input headroom
+  owned: !input owned
+  manual: !input manual
+  command_until: !input command_until
+  watts: !input required_watts
+  shed: !input shed
+  blocked: !input blocked
+  retry_after: !input retry_after
+  midea_device: !input midea_device_id
+triggers:
+  - trigger: template
+    value_template: >-
+      {{ is_state(enabled,'on') and is_state(ac,'off') and is_state(manual,'off') and
+         is_state('sun.sun','above_horizon') and states(battery) | float(-1) >= 100 and
+         states(headroom) | float(-99999) >= watts and
+         as_timestamp(now()) >= state_attr(retry_after,'timestamp') | float(0) and
+         expand(blocked) | selectattr('state','eq','on') | list | count == 0 }}
+    for: {minutes: 5}
+    id: start
+  - trigger: template
+    value_template: >-
+      {{ shed and is_state(owned,'on') and is_state(manual,'off') and
+         (states(battery) | float(-1) < 99 or states(headroom) | float(-99999) < -300 or
+          not is_state('sun.sun','above_horizon') or
+          expand(blocked) | selectattr('state','eq','on') | list | count > 0) }}
+    for: {minutes: 2}
+    id: shortfall
+  - trigger: event
+    event_type: call_service
+    event_data: {domain: climate}
+    id: command
+  - trigger: event
+    event_type: call_service
+    event_data: {domain: midea_ac_lan, service: set_attribute}
+    id: midea_command
+  - trigger: state
+    entity_id: !input ac
+    id: changed
+  - trigger: time
+    at: '00:00:00'
+    id: reset
+conditions: []
+actions:
+  - choose:
+      - conditions: '{{ trigger.id == "reset" }}'
+        sequence:
+          - action: input_boolean.turn_off
+            target: {entity_id: '{{ manual }}'}
+      - conditions: >-
+          {% set ns=namespace(changed=false) %}
+          {% if trigger.id in ['command','midea_command'] %}
+            {% set targets=trigger.event.data.get('service_data',{}).get('entity_id',[]) or [] %}
+            {% set targets=[targets] if targets is string else targets %}
+            {% set matched=ac in targets if trigger.id == 'command' else
+               (midea_device | string != '' and trigger.event.data.get('service_data',{}).get('device_id','') | string == midea_device | string) %}
+            {% set ns.changed = matched and
+               (trigger.event.context.user_id is not none or
+                as_timestamp(now()) > state_attr(command_until,'timestamp') | float(0)) %}
+          {% elif trigger.id == 'changed' and trigger.from_state is not none and trigger.to_state is not none and
+                    trigger.from_state.state not in ['unknown','unavailable'] and trigger.to_state.state not in ['unknown','unavailable'] and
+                    as_timestamp(now()) > state_attr(command_until,'timestamp') | float(0) %}
+            {% set ns.changed=trigger.from_state.state != trigger.to_state.state %}
+            {% for attr in ['temperature','fan_mode','preset_mode','swing_mode','rate_select'] %}
+              {% if trigger.from_state.attributes.get(attr) != trigger.to_state.attributes.get(attr) %}{% set ns.changed=true %}{% endif %}
+            {% endfor %}
+          {% endif %}
+          {{ ns.changed }}
+        sequence:
+          - action: input_boolean.turn_off
+            target: {entity_id: '{{ owned }}'}
+          - action: input_boolean.turn_on
+            target: {entity_id: '{{ manual }}'}
+      - conditions: >-
+          {{ trigger.id == 'start' and is_state(enabled,'on') and is_state(manual,'off') and is_state(ac,'off') and
+             states(battery) | float(-1) >= 100 and states(headroom) | float(-99999) >= watts and
+             as_timestamp(now()) >= state_attr(retry_after,'timestamp') | float(0) and
+             expand(blocked) | selectattr('state','eq','on') | list | count == 0 }}
+        sequence:
+          - action: input_datetime.set_datetime
+            target: {entity_id: '{{ command_until }}'}
+            data: {timestamp: '{{ as_timestamp(now()) + 90 }}'}
+          - action: input_boolean.turn_on
+            target: {entity_id: '{{ owned }}'}
+          - action: climate.set_temperature
+            target: {entity_id: '{{ ac }}'}
+            data: {hvac_mode: cool, temperature: 16}
+          - action: climate.set_fan_mode
+            target: {entity_id: '{{ ac }}'}
+            data: {fan_mode: high}
+          - sequence: !input full_power_actions
+      - conditions: '{{ trigger.id == "shortfall" and is_state(owned,"on") and is_state(manual,"off") and shed }}'
+        sequence:
+          - action: input_datetime.set_datetime
+            target: {entity_id: '{{ command_until }}'}
+            data: {timestamp: '{{ as_timestamp(now()) + 90 }}'}
+          - action: input_boolean.turn_off
+            target: {entity_id: '{{ owned }}'}
+          - action: input_datetime.set_datetime
+            target: {entity_id: '{{ retry_after }}'}
+            data: {timestamp: '{{ as_timestamp(now()) + 900 }}'}
+          - action: climate.turn_off
+            target: {entity_id: '{{ ac }}'}

@@ -1,0 +1,82 @@
+blueprint:
+  name: Cooling Dashboard - Fan Holiday Mode
+  description: >-
+    Run four hours at 50% (level 5 on a ten-speed Dyson), rest two hours, repeat
+    until disabled. Persistent toggle and start timestamp restore the cycle after
+    HA restarts. Disabling mode stops the fan. Dyson maximum sweep is optional.
+  domain: automation
+  input:
+    fan: {name: Fan, selector: {entity: {domain: fan}}}
+    enabled: {name: Holiday toggle, selector: {entity: {domain: input_boolean}}}
+    started: {name: Start timestamp helper with date and time, selector: {entity: {domain: input_datetime}}}
+    dyson_sweep:
+      name: Use dyson_local maximum 350° sweep (requires that integration)
+      default: false
+      selector: {boolean: {}}
+mode: restart
+variables:
+  fan: !input fan
+  enabled: !input enabled
+  started: !input started
+  dyson: !input dyson_sweep
+triggers:
+  - trigger: state
+    entity_id: !input enabled
+    from: 'off'
+    to: 'on'
+    id: enable
+  - trigger: state
+    entity_id: !input enabled
+    from: 'on'
+    to: 'off'
+    id: disable
+  - trigger: time_pattern
+    minutes: /1
+    id: tick
+  - trigger: homeassistant
+    event: start
+    id: startup
+conditions: []
+actions:
+  - choose:
+      - conditions: '{{ trigger.id == "disable" }}'
+        sequence:
+          - action: fan.turn_off
+            target: {entity_id: '{{ fan }}'}
+      - conditions: '{{ is_state(enabled,"on") }}'
+        sequence:
+          - if: '{{ trigger.id == "enable" or state_attr(started,"timestamp") | float(0) <= 0 }}'
+            then:
+              - action: input_datetime.set_datetime
+                target: {entity_id: '{{ started }}'}
+                data: {timestamp: '{{ as_timestamp(now()) }}'}
+          - variables:
+              active: '{{ (as_timestamp(now()) - state_attr(started,"timestamp") | float(0)) % 21600 < 14400 }}'
+          - choose:
+              - conditions: '{{ active }}'
+                sequence:
+                  - if: >-
+                      {{ not is_state(fan,'on') or state_attr(fan,'percentage') | int(0) != 50 or
+                         not is_state_attr(fan,'oscillating',true) or
+                         (dyson and (state_attr(fan,'angle_low') | int(0) != 5 or state_attr(fan,'angle_high') | int(0) != 355)) }}
+                    then:
+                      - action: fan.turn_on
+                        target: {entity_id: '{{ fan }}'}
+                        data: {percentage: 50}
+                      - if: '{{ "Normal" in (state_attr(fan,"preset_modes") or []) }}'
+                        then:
+                          - action: fan.set_preset_mode
+                            target: {entity_id: '{{ fan }}'}
+                            data: {preset_mode: Normal}
+                      - if: '{{ dyson }}'
+                        then:
+                          - action: dyson_local.set_angle
+                            data: {entity_id: '{{ fan }}', angle_low: 5, angle_high: 355}
+                      - action: fan.oscillate
+                        target: {entity_id: '{{ fan }}'}
+                        data: {oscillating: true}
+            default:
+              - if: '{{ is_state(fan,"on") }}'
+                then:
+                  - action: fan.turn_off
+                    target: {entity_id: '{{ fan }}'}

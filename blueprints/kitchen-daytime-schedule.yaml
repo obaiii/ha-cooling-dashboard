@@ -1,0 +1,48 @@
+blueprint:
+  name: Cooling Dashboard - Battery Guarded Daytime AC Schedule
+  description: >-
+    Start the selected AC at Cool 16°C at 09:00 with battery above 35%, or when
+    charge recovers above 35% before 17:00. Stop at 17:00 or below 30%. This
+    scheduled-room policy intentionally applies shutdowns even to manual use;
+    it is separate from the solar-surplus manual-priority policy.
+  domain: automation
+  input:
+    ac: {name: Scheduled AC, selector: {entity: {domain: climate}}}
+    battery: {name: Battery SOC sensor (%), selector: {entity: {domain: sensor}}}
+    enabled: {name: Schedule enable helper, selector: {entity: {domain: input_boolean}}}
+mode: queued
+max: 5
+variables:
+  ac: !input ac
+  battery: !input battery
+  enabled: !input enabled
+triggers:
+  - trigger: time
+    at: '09:00:00'
+    id: 'on'
+  - trigger: numeric_state
+    entity_id: !input battery
+    above: 35
+    id: 'on'
+  - trigger: time
+    at: '17:00:00'
+    id: 'off'
+  - trigger: numeric_state
+    entity_id: !input battery
+    below: 30
+    id: 'off'
+conditions:
+  - '{{ is_state(enabled,"on") }}'
+actions:
+  - choose:
+      - conditions: >-
+          {{ trigger.id == 'on' and now().hour >= 9 and now().hour < 17 and
+             states(battery) | float(-1) > 35 and is_state(ac,'off') }}
+        sequence:
+          - action: climate.set_temperature
+            target: {entity_id: '{{ ac }}'}
+            data: {hvac_mode: cool, temperature: 16}
+      - conditions: '{{ trigger.id == "off" and states(ac) not in ["off","unknown","unavailable"] }}'
+        sequence:
+          - action: climate.turn_off
+            target: {entity_id: '{{ ac }}'}

@@ -13,6 +13,11 @@ air_conditioners:
     humidity: sensor.living_room_humidity
     power: sensor.living_room_ac_power
     led: switch.living_room_ac_display
+    # Optional; requires helpers, save script and night optimisation blueprint.
+    optimisation:
+      enabled: input_boolean.living_cooling_optimisation
+      minimum: input_number.living_cooling_minimum
+      maximum: input_number.living_cooling_maximum
 
   - entity: climate.bedroom
     name: Bedroom
@@ -36,3 +41,15 @@ fans:
     name: Bedroom Fan
     humidity: sensor.bedroom_fan_humidity
     pm2_5: sensor.bedroom_fan_pm_2_5
+    model: Dyson TP07 # Enter your own verified consumer model.
+    holiday_mode: input_boolean.bedroom_fan_holiday
+    sweep:
+      service: dyson_local.set_angle
+    air_quality:
+      - {entity: sensor.bedroom_fan_temperature, name: Temperature}
+      - {entity: sensor.bedroom_fan_humidity, name: Humidity}
+      - {entity: sensor.bedroom_fan_pm_2_5, name: PM2.5}
+      - {entity: sensor.bedroom_fan_pm_10, name: PM10}
+      - {entity: sensor.bedroom_fan_volatile_organic_compounds_index, name: VOC Index}
+      - {entity: sensor.bedroom_fan_nitrogen_dioxide_index, name: NO₂ Index}
+      - {entity: sensor.bedroom_fan_filter_life, name: Filter Life}

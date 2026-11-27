@@ -1,0 +1,121 @@
+blueprint:
+  name: Cooling Dashboard - Night Cooling Optimisation (Midea)
+  description: >-
+    Opt-in per-room Midea gear control, 20:00-08:00 in HA's local timezone.
+    At minimum use Gen 60% and the minimum setpoint; at maximum use full power
+    and minimum minus 2°C (floor 16°C). Between limits retain the stage.
+    Mapped fans run at 40% oscillating in both stages. Off ACs stay off.
+    Requires midea_ac_lan with rate_select; its device ID is not the HA registry UUID.
+  domain: automation
+  input:
+    ac: {name: Air conditioner, selector: {entity: {domain: climate}}}
+    midea_device_id: {name: Midea integration numeric device ID, selector: {text: {}}}
+    enabled: {name: Optimisation toggle, selector: {entity: {domain: input_boolean}}}
+    minimum: {name: Minimum helper, selector: {entity: {domain: input_number}}}
+    maximum: {name: Maximum helper, selector: {entity: {domain: input_number}}}
+    fans:
+      name: Optional room fans
+      default: []
+      selector: {entity: {domain: fan, multiple: true}}
+    holiday_helpers:
+      name: Optional Holiday Mode toggles that take priority over fan assistance
+      default: []
+      selector: {entity: {domain: input_boolean, multiple: true}}
+    blocked:
+      name: Optional backup-power/safety toggles that suspend optimisation
+      default: []
+      selector: {entity: {domain: input_boolean, multiple: true}}
+mode: restart
+variables:
+  ac: !input ac
+  device: !input midea_device_id
+  enabled: !input enabled
+  minimum: !input minimum
+  maximum: !input maximum
+  fans: !input fans
+  holidays: !input holiday_helpers
+  blocked: !input blocked
+  night: '{{ now().hour >= 20 or now().hour < 8 }}'
+triggers:
+  - trigger: time_pattern
+    minutes: /1
+    id: tick
+  - trigger: time
+    at: '20:00:00'
+    id: tick
+  - trigger: time
+    at: '08:00:00'
+    id: day
+  - trigger: homeassistant
+    event: start
+    id: startup
+  - trigger: state
+    entity_id: !input enabled
+    id: settings
+  - trigger: state
+    entity_id: !input minimum
+    id: settings
+  - trigger: state
+    entity_id: !input maximum
+    id: settings
+conditions:
+  - '{{ states(ac) not in ["off","unknown","unavailable"] }}'
+  - '{{ expand(blocked) | selectattr("state","eq","on") | list | count == 0 }}'
+actions:
+  - choose:
+      - conditions: >-
+          {{ (is_state(enabled,'on') and (trigger.id == 'day' or
+             (trigger.id == 'startup' and not night))) or
+             (night and trigger.id == 'settings' and not is_state(enabled,'on')) }}
+        sequence:
+          - action: midea_ac_lan.set_attribute
+            data: {device_id: '{{ device | int }}', attribute: rate_select, value: '100'}
+      - conditions: >-
+          {{ night and is_state(enabled,'on') and
+             is_number(states(minimum)) and is_number(states(maximum)) and
+             states(minimum) | float >= 16 and states(maximum) | float <= 30 and
+             states(minimum) | float < states(maximum) | float and
+             is_number(state_attr(ac,'current_temperature')) }}
+        sequence:
+          - variables:
+              lo: '{{ states(minimum) | float }}'
+              hi: '{{ states(maximum) | float }}'
+              temp: '{{ state_attr(ac,"current_temperature") | float }}'
+              gear: >-
+                {% if temp <= lo %}60{% elif temp >= hi %}100
+                {% elif state_attr(ac,'rate_select') | string in ['60','100'] %}{{ state_attr(ac,'rate_select') }}
+                {% else %}100{% endif %}
+          - if: '{{ states(ac) != "cool" }}'
+            then:
+              - action: climate.set_hvac_mode
+                target: {entity_id: '{{ ac }}'}
+                data: {hvac_mode: cool}
+          - if: '{{ state_attr(ac,"preset_mode") not in [none,"none"] }}'
+            then:
+              - action: climate.set_preset_mode
+                target: {entity_id: '{{ ac }}'}
+                data: {preset_mode: none}
+          - if: '{{ state_attr(ac,"fan_mode") != "high" }}'
+            then:
+              - action: climate.set_fan_mode
+                target: {entity_id: '{{ ac }}'}
+                data: {fan_mode: high}
+          - if: '{{ state_attr(ac,"rate_select") | string != gear | trim }}'
+            then:
+              - action: midea_ac_lan.set_attribute
+                data: {device_id: '{{ device | int }}', attribute: rate_select, value: '{{ gear | trim }}'}
+          - variables:
+              target: '{{ lo if gear | trim == "60" else [16,lo-2] | max }}'
+          - if: '{{ state_attr(ac,"temperature") | float(0) != target | float }}'
+            then:
+              - action: climate.set_temperature
+                target: {entity_id: '{{ ac }}'}
+                data: {temperature: '{{ target }}'}
+          - if: '{{ fans | count > 0 and expand(holidays) | selectattr("state","eq","on") | list | count == 0 }}'
+            then:
+              - action: fan.turn_on
+                target: {entity_id: '{{ fans }}'}
+                data: {percentage: 40}
+              - action: fan.oscillate
+                target: {entity_id: '{{ fans }}'}
+                data: {oscillating: true}

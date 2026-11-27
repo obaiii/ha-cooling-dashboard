@@ -4,13 +4,15 @@ A responsive Home Assistant Lovelace card for air conditioners, fans, air qualit
 
 ## Screenshots
 
-Running ACs use a blue pulse, while running fans use a white pulse. A running fan with poor air quality pulses red and white. Temperature, fan-mode, speed and oscillation controls remain expanded on the dashboard.
+Running ACs use a blue pulse, while running fans use a white pulse. A running fan with poor air quality pulses red and white; Holiday Mode pulses green and yellow. Temperature, fan-mode, speed and sweep controls remain expanded on the dashboard.
 
-![Generic cooling dashboard with blue AC and white fan pulses](screenshots/cooling-dashboard-overview.png)
+![Generic cooling dashboard with AC, fan and Holiday Mode pulses](screenshots/cooling-dashboard-v3.jpg)
 
-Tapping a device opens its Home Assistant details dialog. The exact controls vary according to the installed climate or fan integration.
+Tapping a device opens its cooling details. Optional top-right buttons configure night optimisation or Holiday Mode. “More device controls” opens Home Assistant's native dialog.
 
-![Generic open climate control](screenshots/climate-card-open.png)
+![Generic open AC with Optimise Cooling button and min/max sliders](screenshots/cooling-optimisation-v3.jpg)
+
+![Generic fan air quality and Holiday Mode button](screenshots/fan-holiday-v3.jpg)
 
 ## Features
 
@@ -25,8 +27,14 @@ Tapping a device opens its Home Assistant details dialog. The exact controls var
 - Expanded temperature, climate fan-mode, fan-speed and oscillation controls
 - Fan speed and oscillation stay locked while the fan is off; only its power button starts it
 - Optional AC display/LED toggle
+- Top-left power icons for both ACs and fans
+- Optional adjustable night optimisation with min/max sliders (20:00-08:00 only)
+- Optional 4-hours-on / 2-hours-off fan Holiday Mode and Sunday noon reminders
+- Optional 45° / 90° / 180° / 350° sweep cycling, matching angle icons and separate Sweep Off
+- Fan model and configurable room air-quality readings in opened fan cards
+- Optional reusable solar-surplus and battery-guarded daytime cooling blueprints
 - Current outside weather
-- Tap any AC or fan card to open Home Assistant's normal controls
+- Tap a device for its cooling details; open native controls from there
 - No cloud service, subscription or telemetry
 
 ## Install with HACS
@@ -109,6 +117,35 @@ Replace every example entity with an entity from your own Home Assistant. A larg
 If neither `power` nor `power_attribute` is set, the card also checks the common `compressor_power`, `realtime_power`, and `power` attributes.
 
 Air-quality thresholds use PM2.5 values: good is 12 µg/m³ or below, moderate is above 12 through 35 µg/m³, and poor is above 35 µg/m³.
+
+### Optional mode controls
+
+| Per-device option | Description |
+|---|---|
+| `optimisation` | AC object with `enabled` (input_boolean), `minimum` and `maximum` (input_number) helpers. Shows the top-right Optimise Cooling button and sliders. |
+| `optimisation.save_script` | Optional custom script ID; defaults to `cooling_dashboard_save_optimisation`. The provided package contains this script. |
+| `holiday_mode` | Fan Holiday Mode input_boolean. Requires the Holiday Mode blueprint to perform the cycle. |
+| `sweep` | Fan object enabling angle cycling. Default service is `dyson_local.set_angle`, using `angle_low`/`angle_high` attributes and bounds 5–355°. Only enable for a compatible integration. |
+| `model` | Verified fan model, for example `Dyson TP07`. Displayed in the opened fan card. |
+| `air_quality` | List of `{entity, name}` sensor objects for all environmental readings you want to display. |
+
+The sweep angle button cycles **45° → 90° → 180° → 350° → 45°**. The separate Off button only stops oscillation. Neither starts a powered-off fan. Standard fans without `sweep` keep their normal oscillation toggle. Holiday Mode enforces its own maximum sweep while running.
+
+## Optional cooling automations
+
+HACS installs **only the dashboard JavaScript**. Mode buttons control helpers; they do not install automations. Follow [the setup guide](docs/automations.md) to add the optional helper package and import blueprints, then select your own devices and sensors.
+
+| Blueprint | Behaviour |
+|---|---|
+| [Night cooling optimisation](blueprints/night-cooling-optimisation.yaml) | Midea `midea_ac_lan` only. Per-room min/max controls, Gen 60% at minimum and normal/full cooling at maximum; 20:00-08:00. Mapped fans run at 40% oscillating in both stages. |
+| [Fan Holiday Mode](blueprints/fan-holiday-mode.yaml) | Four hours at 50% with oscillation, two hours off, repeat until disabled. Toggle and cycle timestamp persist through restarts. Optional Dyson 350° sweep. |
+| [Weekly reminder](blueprints/holiday-weekly-reminder.yaml) | Sunday noon reminder naming active Holiday Mode toggles, using your own chosen notification action. |
+| [Solar-surplus cooling](blueprints/solar-surplus-cooling.yaml) | Battery 100% plus five minutes of measured spare solar: Cool 16°C, High. Optional automatic shedding after two minutes of shortfall, 15-minute restart cooldown, manual priority. |
+| [Daytime schedule](blueprints/kitchen-daytime-schedule.yaml) | Cool 16°C at 09:00 above 35% battery, recovery starts before 17:00, off at 17:00 or below 30%. |
+
+All times use **your HA timezone**. These examples are opt-in; inspect their policies before enabling them. Solar headroom must come from trustworthy power measurements. At full battery, curtailed PV can hide spare capacity, so a measured-headroom gate may wait even in sunshine. Starting at 16°C can demand much more power than maintaining a warmer room; size the startup margin for your equipment.
+
+For priority/flexible solar cooling, use one blueprint instance per AC. Disable `shed` for the priority room that should remain on; enable it for the flexible room. Manual commands and remote setting changes release solar ownership for the day. The daytime schedule has a different policy: its scheduled/battery shutdown still applies to manually started ACs.
 
 ## Manual installation
 

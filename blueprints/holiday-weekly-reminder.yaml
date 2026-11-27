@@ -1,0 +1,25 @@
+blueprint:
+  name: Cooling Dashboard - Weekly Holiday Reminder
+  description: >-
+    At Sunday noon in HA's local timezone, run your notification action only if
+    fans remain in Holiday Mode. holiday_message and holiday_count are available
+    to the action. Choose your own mobile_app notification service.
+  domain: automation
+  input:
+    toggles: {name: Fan Holiday Mode toggles, selector: {entity: {domain: input_boolean, multiple: true}}}
+    notify_actions: {name: "Notification action (use holiday_message as the message)", selector: {action: {}}}
+mode: single
+variables:
+  toggles: !input toggles
+triggers:
+  - trigger: time
+    at: '12:00:00'
+conditions:
+  - '{{ now().weekday() == 6 }}'
+  - '{{ expand(toggles) | selectattr("state","eq","on") | list | count > 0 }}'
+actions:
+  - variables:
+      names: '{{ expand(toggles) | selectattr("state","eq","on") | map(attribute="name") | list }}'
+      holiday_count: '{{ names | count }}'
+      holiday_message: '{{ names | join(", ") }} {{ "is" if holiday_count == 1 else "are" }} on Holiday Mode.'
+  - sequence: !input notify_actions

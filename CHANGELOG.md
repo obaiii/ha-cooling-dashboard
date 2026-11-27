@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.0
+
+- Added top-left AC/fan power icons and device dialogs with optional top-right mode buttons.
+- Added adjustable per-room night optimisation (20:00-08:00), persistent min/max helpers and a validating save script.
+- Gen 60% at minimum; normal/full cooling at maximum with a target 2°C below minimum (floor 16°C). Fan High, Cool, and mapped room fans at 40% oscillating in both stages.
+- Added Holiday Mode controls and green/yellow pulses, plus optional 4-hour-on/2-hour-off and Sunday noon reminder blueprints.
+- Added optional 45/90/180/350-degree sweep cycling with matching SVG icons and a separate Off button; fan controls stay locked while powered off.
+- Added fan model and configurable environmental sensor readings in opened fan cards.
+- Added optional solar-surplus cooling with manual priority and a battery-guarded scheduled AC blueprint, both starting at Cool 16°C / High where configured.
+- Kept all setup examples generic; HACS installs the card only and automation setup is explicit.
+- Corrected missing/boolean power values so they are not displayed as real measured watts.
+
 ## 2.0.0
 
 - Renamed the card and package to Cooling Dashboard.

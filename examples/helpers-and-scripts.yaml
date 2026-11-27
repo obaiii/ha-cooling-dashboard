@@ -1,0 +1,78 @@
+# Optional HA package. Copy to config/packages/cooling_dashboard.yaml and enable
+# homeassistant: packages: !include_dir_named packages in configuration.yaml.
+# These are generic examples. Repeat/rename helpers for each additional room.
+# No initial values on persistent mode/timestamp helpers: restored after restart.
+input_boolean:
+  living_cooling_optimisation:
+    name: Living Room Cooling Optimisation
+  bedroom_fan_holiday:
+    name: Bedroom Fan Holiday Mode
+  living_solar_cooling_enabled:
+    name: Living Room Solar Cooling Enabled
+  living_solar_cooling_owned:
+    name: Living Room Solar Cooling Ownership
+  living_solar_cooling_manual:
+    name: Living Room Solar Cooling Manual Override
+  kitchen_cooling_schedule:
+    name: Kitchen Cooling Schedule Enabled
+input_number:
+  living_cooling_minimum:
+    name: Living Room Cooling Minimum
+    min: 16
+    max: 30
+    step: 0.5
+    unit_of_measurement: °C
+  living_cooling_maximum:
+    name: Living Room Cooling Maximum
+    min: 16
+    max: 30
+    step: 0.5
+    unit_of_measurement: °C
+input_datetime:
+  bedroom_fan_holiday_started:
+    name: Bedroom Fan Holiday Started
+    has_date: true
+    has_time: true
+  living_solar_cooling_command_until:
+    name: Living Room Solar Command Grace
+    has_date: true
+    has_time: true
+  living_solar_cooling_retry_after:
+    name: Living Room Solar Retry After
+    has_date: true
+    has_time: true
+script:
+  cooling_dashboard_save_optimisation:
+    alias: Cooling Dashboard - Save Optimisation
+    mode: queued
+    max: 20
+    fields:
+      enabled_helper: {required: true, selector: {entity: {domain: input_boolean}}}
+      minimum_helper: {required: true, selector: {entity: {domain: input_number}}}
+      maximum_helper: {required: true, selector: {entity: {domain: input_number}}}
+      minimum: {required: true, selector: {number: {min: 16, max: 30, step: 0.5}}}
+      maximum: {required: true, selector: {number: {min: 16, max: 30, step: 0.5}}}
+      enabled: {required: true, selector: {boolean: {}}}
+    sequence:
+      - if: >-
+          {{ minimum | float(-1) < 16 or maximum | float(99) > 30 or
+             minimum | float(99) >= maximum | float(-1) or
+             (minimum | float(0) * 2) % 1 != 0 or (maximum | float(0) * 2) % 1 != 0 or
+             enabled_helper.split('.')[0] != 'input_boolean' or
+             minimum_helper.split('.')[0] != 'input_number' or
+             maximum_helper.split('.')[0] != 'input_number' or minimum_helper == maximum_helper }}
+        then:
+          - stop: Select valid helper entities and a minimum below maximum, 16-30°C in 0.5°C steps.
+            error: true
+      - action: input_boolean.turn_off
+        target: {entity_id: '{{ enabled_helper }}'}
+      - action: input_number.set_value
+        target: {entity_id: '{{ minimum_helper }}'}
+        data: {value: '{{ minimum | float }}'}
+      - action: input_number.set_value
+        target: {entity_id: '{{ maximum_helper }}'}
+        data: {value: '{{ maximum | float }}'}
+      - if: '{{ enabled | bool }}'
+        then:
+          - action: input_boolean.turn_on
+            target: {entity_id: '{{ enabled_helper }}'}
